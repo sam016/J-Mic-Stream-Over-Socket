@@ -6,44 +6,52 @@ import javax.sound.sampled.AudioFormat;
 import javax.sound.sampled.AudioSystem;
 import javax.sound.sampled.TargetDataLine;
 
+// for more details, refer to
+// https://docs.oracle.com/javase/tutorial/sound/capturing.html
+
 public class Radio {
 
     public static final int ERROR_LIMIT = 10;
 
-    boolean outVoice = true;
-    AudioFormat format = getAudioFormat();
+    AudioFormat format;
     Server server;
-
-
-    private AudioFormat getAudioFormat() {
-        float sampleRate = 8000.0F;
-        int sampleSizeBits = 16;
-        int channels = 1;
-        boolean signed = true;
-        boolean bigEndian = false;
-
-        return new AudioFormat(sampleRate, sampleSizeBits, channels, signed, bigEndian);
-    }
 
     public Radio() throws IOException{
         try{
+            // initializing the server
             server=new Server();
+            //  starting the server
             server.Start();
+            
+            //  setting the mic audio format
+            setAudioFormat();
+            
+            //  running the streaming of mic data
             Run();
         }catch(Exception e){
             e.printStackTrace();
         }
     }
 
+
+    private void setAudioFormat() {
+        format = new AudioFormat(8000.F   ,// Sample Rate 
+                                 16       ,// Size of SampleBits
+                                 1        ,// Number of Channels
+                                 true     ,// Is Signed?
+                                 false     // Is Big Endian?
+                                );
+    }
+
     public void Run(){
+        boolean running=true;
         try{
             TargetDataLine mic = AudioSystem.getTargetDataLine(format);
             mic.open(format);
             System.out.println("Mic open.");
-            byte tmpBuff[] = new byte[mic.getBufferSize()/5];
+            byte tmpBuff[] = new byte[(int)(format.getSampleRate() * 0.4)];
             mic.start();
-            while(outVoice) {
-                //System.out.println("Reading from mic.");
+            while(running) {
                 int count = mic.read(tmpBuff,0,tmpBuff.length);
                 if (count > 0){
                     for(int i=0;i<server.Clients.size();i++){
@@ -65,10 +73,11 @@ public class Radio {
                     }
                 }
             }
+            //  drain() causes the mixer's remaining data to get delivered to the target data line's buffer
             mic.drain();
             mic.close();
-            System.out.println("Stopped listening from mic.");
         }catch(Exception e){
+            System.out.println("Error!!!");
             e.printStackTrace();
         }
     }
@@ -76,8 +85,6 @@ public class Radio {
 
     public static void main (String args[]) throws IOException{
         new Radio();
-
     }
-
-
+    
 }
