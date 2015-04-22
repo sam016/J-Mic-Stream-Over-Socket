@@ -1,90 +1,78 @@
 package av;
 
-import java.io.IOException;
-
 import javax.sound.sampled.AudioFormat;
 import javax.sound.sampled.AudioSystem;
+import javax.sound.sampled.LineUnavailableException;
 import javax.sound.sampled.TargetDataLine;
-
-// for more details, refer to
-// https://docs.oracle.com/javase/tutorial/sound/capturing.html
+import java.io.IOException;
 
 public class Radio {
 
-    public static final int ERROR_LIMIT = 10;
 
-    AudioFormat format;
-    Server server;
+    TargetDataLine _mic;
+    Server _server;
+    boolean _running = true;
+    private int count;
 
-    public Radio() throws IOException{
-        try{
+    public Radio() throws IOException, LineUnavailableException {
+        try {
             // initializing the server
-            server=new Server();
+            _server = new Server();
             //  starting the server
-            server.Start();
-            
-            //  setting the mic audio format
-            setAudioFormat();
-            
+            _server.Start();
+
+            //  initializing Mic
+            initMic();
+
             //  running the streaming of mic data
             Run();
-        }catch(Exception e){
+        } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
+    public static void main(String args[]) throws IOException, LineUnavailableException {
+        new Radio();
 
-    private void setAudioFormat() {
-        format = new AudioFormat(8000.F   ,// Sample Rate 
-                                 16       ,// Size of SampleBits
-                                 1        ,// Number of Channels
-                                 true     ,// Is Signed?
-                                 false     // Is Big Endian?
-                                );
+
+    private void initMic() throws LineUnavailableException {
+        //  specifying the audio format
+        AudioFormat _format = new AudioFormat(8000.F,// Sample Rate
+                16,     // Size of SampleBits
+                1,      // Number of Channels
+                true,   // Is Signed?
+                false   // Is Big Endian?
+        );
+
+        //  getting the source line i.e, mic
+        _mic = AudioSystem.getTargetDataLine(_format);
+
+        //  causes the line to acquire any required system resources and become operational
+        _mic.open(_format);
     }
 
-    public void Run(){
-        boolean running=true;
-        try{
-            TargetDataLine mic = AudioSystem.getTargetDataLine(format);
-            mic.open(format);
+    public void Run() {
+        try {
             System.out.println("Mic open.");
-            byte tmpBuff[] = new byte[(int)(format.getSampleRate() * 0.4)];
-            mic.start();
-            while(running) {
-                int count = mic.read(tmpBuff,0,tmpBuff.length);
-                if (count > 0){
-                    for(int i=0;i<server.Clients.size();i++){
-                        Client cl=server.Clients.get(i);
-                        try{
-                            cl.Send(tmpBuff,0,count);
-                            cl.ErrorCount=0;
-                        }
-                        catch(Exception ex){
-                            cl.ErrorCount++;
-                            System.out.println(cl.RemoteAddress.toString()+" @ Send Error#"+cl.ErrorCount);
-                            if(cl.ErrorCount>ERROR_LIMIT){
-                                System.out.println("\tError limit exceeded.");
-                                System.out.println("\tRemoving client "+cl.RemoteAddress.toString());
-                                server.Clients.remove(i);
-                                i-=1;
-                            }
-                        }
-                    }
+            byte _buffer[] = new byte[(int) (_mic.getFormat().getSampleRate() * 0.4)];
+            _mic.start();
+            while (_running) {
+                // returns the length of data copied in buffer
+                int count = _mic.read(_buffer, 0, _buffer.length);
+
+                //if data is available
+                if (count > 0) {
+                    _server.SendToAll(_buffer, 0, count);
                 }
             }
+            //  honestly.... program never reaches here
             //  drain() causes the mixer's remaining data to get delivered to the target data line's buffer
-            mic.drain();
-            mic.close();
-        }catch(Exception e){
+            _mic.drain();
+            _mic.close();
+        } catch (Exception e) {
             System.out.println("Error!!!");
             e.printStackTrace();
         }
-    }
+    }   }
 
-
-    public static void main (String args[]) throws IOException{
-        new Radio();
-    }
-    
 }
