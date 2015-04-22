@@ -5,7 +5,6 @@ import java.io.IOException;
 /**
  * Created by VarunKr on 22-04-2015.
  */
-
 public class Receiver {
 
     public static void main(String [] args){
@@ -15,7 +14,7 @@ public class Receiver {
         }
 
         try{
-            new av.Client(args[0]);
+            new av.Client(args[0]).Start();
         }
         catch(Exception ex){
             System.out.println("Error in client!!!");

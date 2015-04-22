@@ -1,7 +1,6 @@
 package av;
 
 import javax.sound.sampled.*;
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.Socket;
@@ -11,57 +10,68 @@ import java.net.Socket;
  */
 public class Client {
 
-    private IncomingSoundListener isl = new IncomingSoundListener();
-    AudioFormat format = getAudioFormat();
-    InputStream is;
-    Socket client;
-    String serverName = "127.0.0.1";
-    int port=3000;
-    boolean inVoice = true;
+    public static int PORT = 3000;
 
-    public Client(String serverName) throws IOException {
-        this.serverName = serverName;
-        isl.runListener();
+    SourceDataLine _speaker;
+    InputStream _streamIn;
+    Socket _server;
+    String _serverName = "127.0.0.1";
+    boolean _running = true;
+
+    public Client(String serverName) throws IOException,LineUnavailableException {
+        this._serverName = serverName;
+        init();
     }
 
-    private AudioFormat getAudioFormat(){
-        float sampleRate = 8000.0F;
-        int sampleSizeBits = 16;
-        int channels = 1;
-        boolean signed = true;
-        boolean bigEndian = false;
+    private void init() throws LineUnavailableException{
+        //  specifying the audio format
+        AudioFormat _format = new AudioFormat(8000.F,// Sample Rate
+                16,     // Size of SampleBits
+                1,      // Number of Channels
+                true,   // Is Signed?
+                false   // Is Big Endian?
+        );
 
-        return new AudioFormat(sampleRate, sampleSizeBits, channels, signed, bigEndian);
+        //  creating the DataLine Info for the speaker format
+        DataLine.Info speakerInfo = new DataLine.Info(SourceDataLine.class, _format);
+
+        //  getting the mixer for the speaker
+        _speaker = (SourceDataLine) AudioSystem.getLine(speakerInfo);
+        _speaker.open(_format);
     }
 
-    public void Start(){
-        try{
-            System.out.println("Connecting to server @" + serverName + ":" + port);
-            client = new Socket(serverName, port);
-            System.out.println("Connected to: " + client.getRemoteSocketAddress());
-            System.out.println("Listening for incoming audio.");
-            DataLine.Info speakerInfo = new DataLine.Info(SourceDataLine.class,format);
-            SourceDataLine speaker = (SourceDataLine) AudioSystem.getLine(speakerInfo);
-            speaker.open(format);
+    public void Start() {
+        try {
+            System.out.println("Connecting to server @" + _serverName + ":" + PORT);
+
+            //  creating the socket and connect to the server
+            _server = new Socket(_serverName, PORT);
+            System.out.println("Connected to: " + _server.getRemoteSocketAddress());
+
+            //  gettting the server stream
+            _streamIn = _server.getInputStream();
+
+            _speaker.start();
+
             byte[] data = new byte[8000];
-            speaker.start();
-            while(inVoice){
-                is = client.getInputStream();
-                if(is.available()<=0) continue;
-                int dataLen = is.read(data,0,data.length);
-                ByteArrayInputStream bais = new ByteArrayInputStream(data,0,dataLen);
-                AudioInputStream ais = new AudioInputStream(bais,format,dataLen);
-                int bytesRead = 0;
-                if((bytesRead = ais.read(data)) != -1){
-                    speaker.write(data,0,bytesRead);
+            System.out.println("Waiting for data...");
+            while (_running) {
+
+                //  checking if the data is available to speak
+                if (_streamIn.available() <= 0)
+                    continue;   //  data not available so continue back to start of loop
+
+                //  count of the data bytes read
+                int readCount= _streamIn.read(data, 0, data.length);
+
+                if(readCount>0){
+                    _speaker.write(data, 0, readCount);
                 }
-                ais.close();
-                bais.close();
             }
-            speaker.drain();
-            speaker.close();
-            System.out.println("Stopped listening to incoming audio.");
-        }catch(Exception e){
+            //honestly.... the control never reaches here.
+            _speaker.drain();
+            _speaker.close();
+        } catch (Exception e) {
             e.printStackTrace();
         }
     }
